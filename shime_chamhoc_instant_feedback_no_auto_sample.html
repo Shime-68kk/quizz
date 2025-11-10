@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShimeChamhoc – Instant Feedback (no auto-sample)</title>
+  <style>
+    :root{ --bg:#0b1220; --card:#121a2b; --muted:#93a1b1; --text:#e6edf3; --acc:#7aa2ff; --ok:#2ecc71; --bad:#ff6b6b; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#0b1220,#0b1220 200px,#0e1627);color:var(--text)}
+    header{position:sticky;top:0;z-index:3;background:rgba(11,18,32,.7);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #1d2740}
+    .wrap{max-width:1100px;margin:auto;padding:16px}
+    .row{display:grid;grid-template-columns:300px 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid #1d2740;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .card h3{margin:0 0 6px 0}
+    .pad{padding:16px}
+    .muted{color:var(--muted);font-size:14px}
+    .btn{cursor:pointer;border:none;border-radius:12px;padding:10px 14px;font-weight:600;background:#1b2a4a;color:#dbe7ff;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+    .btn:hover{transform:translateY(-1px);background:#203258}
+    .btn.secondary{background:#19243c;color:#c7d4ff}
+    .btn.ghost{background:transparent;border:1px dashed #2a3a62;color:#c7d4ff}
+    .btn.warn{background:#3a1f2a;color:#ffd7de}
+    .btn.ok{background:#143a2b;color:#bff7d3}
+    .grid{display:grid;gap:10px}
+    .choice{border:1px solid #2a3a62;border-radius:12px;padding:12px;cursor:pointer;user-select:none;}
+    .choice:hover{border-color:#3d5ca8}
+    .choice.active{outline:2px solid var(--acc);background:#121f3f}
+    .choice.correct{outline:2px solid var(--ok);background:#0f2c22}
+    .choice.wrong{outline:2px solid var(--bad);background:#2a1420}
+    .qno{font-weight:700;letter-spacing:.04em;color:#b6c6ff}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#1b2a4a;color:#c7d4ff;font-size:12px}
+    .split{display:flex;gap:10px;flex-wrap:wrap}
+    input[type="text"], input[type="number"], textarea{ width:100%;padding:10px 12px;border-radius:10px;border:1px solid #263557;background:#0d1424;color:#e6edf3 }
+    input[type="file"]{width:100%}
+    .footer{margin-top:8px;font-size:13px;color:#a7b6d8}
+    .timer{font-variant-numeric:tabular-nums}
+    .progress{height:8px;background:#111a2d;border:1px solid #1d2740;border-radius:999px;overflow:hidden}
+    .progress>div{height:100%;background:linear-gradient(90deg,#7aa2ff,#86efac);width:0%}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #223055;padding:8px 6px;text-align:left}
+    code{background:#0d1424;border:1px solid #223055;color:#bfe1ff;padding:2px 6px;border-radius:6px}
+    @media (max-width:960px){.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div style="font-weight:800;letter-spacing:.02em">📘 ShimeChamhoc – Instant Feedback</div>
+      <div class="split">
+        <button class="btn secondary" id="btnImport">Nhập JSON</button>
+        <button class="btn ghost" id="btnExportTemplate">Tải mẫu JSON</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" style="margin-top:16px">
+    <div class="row">
+      <aside class="card pad" id="panelSettings">
+        <h3>Cài đặt</h3>
+        <div class="grid">
+          <label class="grid">Tên bài kiểm tra
+            <input type="text" id="quizTitle" placeholder="VD: Kiểm tra Chương 1" />
+          </label>
+          <div class="grid">
+            <label>Giới hạn thời gian (phút, 0 = không giới hạn)</label>
+            <input type="number" id="timeLimit" min="0" step="1" value="0" />
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="shuffle" checked />
+            <label for="shuffle">Xáo trộn câu hỏi & đáp án</label>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="instant" checked />
+            <label for="instant">Chấm tức thì (chọn là biết đúng/sai ngay)</label>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="autoNext" />
+            <label for="autoNext">Đúng thì tự chuyển câu (0.6s)</label>
+          </div>
+          <div class="split">
+            <button class="btn ok" id="btnStart">Bắt đầu</button>
+            <button class="btn warn" id="btnReset">Xoá kết quả</button>
+          </div>
+          <div class="footer">Bật <b>Chấm tức thì</b> để biết đúng/sai ngay khi chọn. Bản này <b>không tự nạp ví dụ</b> để tránh nhầm lẫn.</div>
+        </div>
+      </aside>
+
+      <section class="card pad" id="panelMain">
+        <div id="screenIntro">
+          <h2>Chào mừng!</h2>
+          <p class="muted">Bản này hỗ trợ chấm tức thì. Khi bạn chọn đáp án, hệ thống sẽ tô xanh/đỏ ngay và (tuỳ chọn) tự chuyển câu nếu đúng.</p>
+          <div class="split">
+            <input type="file" id="fileInput" accept="application/json" />
+            <button class="btn" id="btnParse">Tải câu hỏi</button>
+          </div>
+          <details style="margin-top:14px">
+            <summary><b>Định dạng JSON</b> (bấm để xem)</summary>
+<pre><code id="schemaCode"></code></pre>
+          </details>
+        </div>
+
+        <div id="screenQuiz" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+            <div><span class="pill qno" id="qIndex"></span> <span class="pill" id="qType"></span></div>
+            <div class="pill timer" id="timer">--:--</div>
+          </div>
+          <div id="qText" style="font-size:20px;font-weight:700;margin-bottom:12px"></div>
+          <div id="qChoices" class="grid"></div>
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px">
+            <button class="btn secondary" id="btnPrev">← Trước</button>
+            <div class="split">
+              <button class="btn" id="btnCheck">Kiểm tra</button>
+              <button class="btn ok" id="btnNext">Tiếp →</button>
+              <button class="btn warn" id="btnSubmit">Nộp bài</button>
+            </div>
+          </div>
+          <div id="explain" class="muted" style="margin-top:10px"></div>
+        </div>
+
+        <div id="screenResult" style="display:none">
+          <h2>Kết quả</h2>
+          <p id="scoreLine"></p>
+          <div class="progress" style="margin:10px 0"><div id="scoreBar"></div></div>
+          <div class="split">
+            <button class="btn" id="btnReview">Xem đáp án</button>
+            <button class="btn" id="btnExportCSV">Xuất CSV</button>
+            <button class="btn secondary" id="btnRestart">Làm lại</button>
+          </div>
+          <div id="reviewPanel" style="margin-top:16px"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (sel)=>document.querySelector(sel);
+    const $$ = (sel)=>Array.from(document.querySelectorAll(sel));
+    const strip = (s)=> (s??'').toString().trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+    const schema = { title:"Tên bài kiểm tra", shuffle:true, timeLimit:600, questions:[ { id:"q1", type:"single", text:"...", choices:["A","B","C","D"], answer:1 }, { id:"q2", type:"multiple", text:"...", choices:["A","B","C","D"], answer:[0,3] }, { id:"q3", type:"text", text:"...", answer:"…", aliases:["đồng nghĩa 1","đồng nghĩa 2"] } ]};
+    $('#schemaCode').textContent = JSON.stringify(schema, null, 2);
+
+    let quiz = null; let idx = 0; let answers = []; let timerId=null; let startedAt=0; let elapsed=0;
+    function shuffleArray(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} }
+    function shuffleChoicesAndRemap(q){ if(!q||!Array.isArray(q.choices)) return; const arr=q.choices.map((text,idx)=>({text,idx})); shuffleArray(arr); q.choices = arr.map(o=>o.text); if(q.type==='single'){ const old=Number(q.answer); const ni=arr.findIndex(o=>o.idx===old); if(ni>=0) q.answer=ni; } else if(q.type==='multiple'){ const set=new Set((q.answer||[]).map(Number)); const mapped=[]; arr.forEach((o,ni)=>{ if(set.has(o.idx)) mapped.push(ni); }); q.answer = mapped.sort((a,b)=>a-b); } }
+
+    function loadQuiz(obj){ quiz = JSON.parse(JSON.stringify(obj)); $('#quizTitle').value = quiz.title || ''; $('#timeLimit').value = Math.max(0, Math.round((quiz.timeLimit||0)/60)); $('#shuffle').checked = !!quiz.shuffle; answers = quiz.questions.map(q=>({type:q.type, value:null, correct:null})); idx=0; elapsed=0; startedAt=0; clearInterval(timerId); timerId=null; showIntro(false); showQuiz(false); showResult(false); }
+    function showIntro(v=true){ $('#screenIntro').style.display = v?'block':'none'; }
+    function showQuiz(v=true){ $('#screenQuiz').style.display = v?'block':'none'; }
+    function showResult(v=true){ $('#screenResult').style.display = v?'block':'none'; }
+
+    function collectCurrent(){ const q=quiz.questions[idx]; let v=null; if(q.type==='single'){ const r=$('#qChoices input[type=radio]:checked'); v=r? Number(r.value):null; } else if(q.type==='multiple'){ v=$$('#qChoices input[type=checkbox]:checked').map(x=>Number(x.value)); } else { const t=$('#qChoices input[type=text]'); v=t? t.value:''; } answers[idx].value=v; }
+
+    function checkCurrent(showExplain=true, quiet=false){ const q=quiz.questions[idx]; const a=answers[idx]; if(a.value==null || (Array.isArray(a.value)&&a.value.length===0) || (q.type==='text' && strip(a.value)==='')){ if(!quiet) alert('Hãy trả lời câu hỏi trước khi kiểm tra.'); return false; } let ok=false; if(q.type==='single') ok = Number(a.value)===Number(q.answer); else if(q.type==='multiple'){ const E=(q.answer||[]).slice().sort(); const G=(a.value||[]).slice().sort(); ok = JSON.stringify(E)===JSON.stringify(G); } else { const base=strip(q.answer); const aliases=(q.aliases||[]).map(strip); const got=strip(a.value); ok=(got===base)||aliases.includes(got); } a.correct=ok; if(q.type!=='text'){ $$('#qChoices .choice').forEach((wrap,i)=>{ wrap.classList.remove('correct','wrong'); const right = q.type==='single'? (i===Number(q.answer)) : (q.answer||[]).includes(i); const chosen = q.type==='single'? (i===Number(a.value)) : (a.value||[]).includes(i); if(right) wrap.classList.add('correct'); if(chosen && !right) wrap.classList.add('wrong'); }); } if(showExplain && q.explanation){ $('#explain').textContent = 'Giải thích: '+q.explanation; } return ok; }
+
+    function renderQuestion(){ const q=quiz.questions[idx]; $('#qIndex').textContent = `Câu ${idx+1}/${quiz.questions.length}`; $('#qType').textContent = q.type.toUpperCase(); $('#qText').textContent = q.text; const box=$('#qChoices'); box.innerHTML=''; $('#explain').textContent=''; const instant = $('#instant').checked; const autoNext = $('#autoNext').checked;
+      if(q.type==='single' || q.type==='multiple'){
+        q.choices.forEach((c,i)=>{ const wrap=document.createElement('div'); wrap.className='choice'; const inp=document.createElement('input'); inp.type=(q.type==='single')?'radio':'checkbox'; inp.name='pick'; inp.value=i; inp.style.marginRight='8px'; const lab=document.createElement('label'); lab.textContent=c; wrap.appendChild(inp); wrap.appendChild(lab); box.appendChild(wrap);
+          const handler = ()=>{ collectCurrent(); if(instant){ const ok=checkCurrent(true, true); if(autoNext && ok){ setTimeout(()=>{ if(idx<quiz.questions.length-1){ idx++; renderQuestion(); } },600); } } };
+          wrap.addEventListener('click', (e)=>{ if(e.target.tagName!=='INPUT'){ inp.checked = q.type==='single' ? true : !inp.checked; } $$('.choice').forEach(el=>el.classList.remove('active')); if(q.type==='single') wrap.classList.add('active'); handler(); });
+          inp.addEventListener('change', handler);
+        });
+        const v=answers[idx].value; if(v!=null){ if(q.type==='single'){ const r=box.querySelector(`input[value="${v}"]`); if(r){ r.checked=true; r.closest('.choice').classList.add('active'); } } else if(Array.isArray(v)){ v.forEach(j=>{ const c=box.querySelector(`input[value="${j}"]`); if(c){ c.checked=true; } }); } }
+      } else { const inp=document.createElement('input'); inp.type='text'; inp.placeholder='Nhập câu trả lời...'; inp.value=answers[idx].value??''; box.appendChild(inp); const fire=()=>{ collectCurrent(); if(instant){ const ok=checkCurrent(true, true); if(autoNext && ok){ setTimeout(()=>{ if(idx<quiz.questions.length-1){ idx++; renderQuestion(); } },600); } } }; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') fire(); }); inp.addEventListener('blur', fire); }
+      $('#btnPrev').disabled = (idx===0); $('#btnNext').disabled = (idx===quiz.questions.length-1);
+    }
+
+    function finalize(){ const total=quiz.questions.length; let correct=0; answers.forEach(x=>{ if(x.correct) correct++; }); const pct=Math.round(correct*100/total); $('#scoreLine').textContent=`Điểm: ${correct}/${total} (${pct}%)`; $('#scoreBar').style.width = pct+'%'; showQuiz(false); showResult(true); renderReview(); }
+    function renderReview(){ const wrap=$('#reviewPanel'); wrap.innerHTML=''; quiz.questions.forEach((q,i)=>{ const a=answers[i]; const item=document.createElement('div'); item.className='card pad'; const title=document.createElement('div'); title.innerHTML=`<b>Câu ${i+1}.</b> ${q.text}`; const verdict=document.createElement('div'); verdict.className='muted'; verdict.textContent=a.correct? 'Đúng ✔':'Sai ✖'; const yours=document.createElement('div'); yours.style.marginTop='6px'; yours.innerHTML='<b>Trả lời:</b> '+formatAnswer(q,a.value); const corr=document.createElement('div'); corr.innerHTML='<b>Đáp án đúng:</b> '+formatAnswer(q,q.answer); const ex=document.createElement('div'); ex.className='muted'; ex.style.marginTop='6px'; ex.textContent=q.explanation?('Giải thích: '+q.explanation):''; item.append(title,verdict,yours,corr,ex); wrap.appendChild(item); }); }
+    function formatAnswer(q,val){ if(q.type==='text') return `<code>${val??''}</code>`; if(q.type==='single') return `<code>${q.choices[val]??''}</code>`; if(q.type==='multiple') return (val||[]).map(i=>`<code>${q.choices[i]}</code>`).join(' '); return ''; }
+    function toCSV(){ const esc=s=>(''+s).replace(/\"/g,'""'); const rows=[["qid","text","type","correct_answer","your_answer","is_correct"], ...quiz.questions.map((q,i)=>[ q.id||i+1, q.text, q.type, q.type==='text'? q.answer : (Array.isArray(q.answer)? q.answer.map(j=>q.choices[j]).join('|') : q.choices[q.answer]), ( ()=>{ const v=answers[i].value; return q.type==='text'? v : (Array.isArray(v)? v.map(j=>q.choices[j]).join('|') : q.choices[v]); })(), answers[i].correct? '1':'0' ]) ]; return rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n'); }
+
+    function startTimer(){ const mins=Number($('#timeLimit').value)||0; const limit=Math.max(0, mins*60); if(limit===0){ $('#timer').textContent='∞'; return; } startedAt=Date.now(); clearInterval(timerId); timerId=setInterval(()=>{ const used=Math.floor((Date.now()-startedAt)/1000)+elapsed; const left=Math.max(0,limit-used); const mm=String(Math.floor(left/60)).padStart(2,'0'); const ss=String(left%60).padStart(2,'0'); $('#timer').textContent=`${mm}:${ss}`; if(left<=0){ clearInterval(timerId); finalize(); } }, 250); }
+
+    // Events
+    $('#btnImport').onclick = ()=>$('#fileInput').click();
+    $('#btnExportTemplate').onclick = ()=>{ const blob=new Blob([JSON.stringify(schema,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='quiz_template.json'; a.click(); };
+    $('#btnParse').onclick = ()=>{ const f=$('#fileInput').files[0]; if(!f) return alert('Chọn tệp JSON trước đã.'); const r=new FileReader(); r.onload=()=>{ try{ const obj=JSON.parse(r.result); loadQuiz(obj); alert('Đã nạp câu hỏi!'); } catch(e){ alert('JSON không hợp lệ: '+e.message); } }; r.readAsText(f); };
+    $('#btnStart').onclick = ()=>{ if(!quiz){ alert('Chưa có bộ câu hỏi.'); return; } quiz.title=$('#quizTitle').value||quiz.title||'Bài kiểm tra'; quiz.shuffle=$('#shuffle').checked; const mins=Math.max(0, Number($('#timeLimit').value)||0); quiz.timeLimit=mins*60; if(quiz.shuffle){ shuffleArray(quiz.questions); quiz.questions.forEach(q=>{ if(q.choices) shuffleChoicesAndRemap(q); }); } answers = quiz.questions.map(q=>({type:q.type, value:null, correct:null})); idx=0; elapsed=0; startedAt=0; clearInterval(timerId); timerId=null; showIntro(false); showResult(false); showQuiz(true); renderQuestion(); startTimer(); };
+    $('#btnReset').onclick = ()=>{ answers = quiz? quiz.questions.map(q=>({type:q.type,value:null,correct:null})) : []; idx=0; renderQuestion(); };
+    $('#btnPrev').onclick = ()=>{ collectCurrent(); idx=Math.max(0, idx-1); renderQuestion(); };
+    $('#btnNext').onclick = ()=>{ collectCurrent(); if(idx<quiz.questions.length-1){ idx++; renderQuestion(); } };
+    $('#btnCheck').onclick = ()=>{ collectCurrent(); checkCurrent(true, false); };
+    $('#btnSubmit').onclick = ()=>{ collectCurrent(); quiz.questions.forEach((q,i)=>{ idx=i; if(answers[i].value!=null) checkCurrent(false, true); }); idx=quiz.questions.length-1; finalize(); };
+    $('#btnReview').onclick = ()=>{ const p=$('#reviewPanel'); p.style.display = p.style.display==='none'?'block':'none'; };
+    $('#btnExportCSV').onclick = ()=>{ const csv = toCSV(); const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='quiz_results.csv'; a.click(); };
+    $('#btnRestart').onclick = ()=>{ loadQuiz(quiz); showIntro(true); };
+
+    // init: deliberately do NOT auto-load any sample to avoid confusion
+    // (wait for user to import JSON)
+  </script>
+</body>
+</html>
